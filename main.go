@@ -15,6 +15,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"html/template"
 	"io/ioutil"
@@ -27,7 +28,10 @@ import (
 	"github.com/google/go-github/github"
 )
 
-const docTmp = `
+var ghToken string
+var templateFile string
+
+const defaultTemplate = `
 {{.Issue.GetBody}}
 {{range .Comments}}
 {{.GetBody}}
@@ -37,22 +41,44 @@ const docTmp = `
 {{end}}
 `
 
-func main() {
-	org := os.Args[1]
-	repo := os.Args[2]
-	iNum, err := strconv.Atoi(os.Args[3])
+func init() {
+	const (
+		tokenUsage = `
+Use -token to supply a github token
+This will try and use ~/.ghtoken as a default
+`
+		templateUseage = `
+Use -tempalte to supply a tempalte file.
+This template will have access to
+.Issue
+.Comments
+.Labels
+`
+	)
+
+	// Get a github token from a .ghtoken file
+	defaultToken, err := ioutil.ReadFile(fmt.Sprintf("%s%s", os.Getenv("HOME"), "/.ghtoken"))
 	if err != nil {
 		panic(err)
 	}
-	// Get a github token from a .ghtoken file
-	ghToken, err := ioutil.ReadFile(fmt.Sprintf("%s%s", os.Getenv("HOME"), "/.ghtoken"))
+
+	flag.StringVar(&ghToken, "token", strings.TrimSpace(string(defaultToken)), tokenUsage)
+
+	flag.StringVar(&templateFile, "template", "", templateUseage)
+}
+
+func main() {
+	flag.Parse()
+	org := flag.Arg(0)
+	repo := flag.Arg(1)
+	iNum, err := strconv.Atoi(flag.Arg(2))
 	if err != nil {
 		panic(err)
 	}
 
 	ctx := context.Background()
 	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: strings.TrimSpace(string(ghToken))},
+		&oauth2.Token{AccessToken: ghToken},
 	)
 	tc := oauth2.NewClient(ctx, ts)
 
@@ -72,6 +98,15 @@ func main() {
 	labels, _, err := client.Issues.ListLabelsByIssue(ctx, org, repo, iNum, nil)
 	if err != nil {
 		panic(err)
+	}
+
+	docTmp := defaultTemplate
+	if templateFile != "" {
+		tb, err := ioutil.ReadFile(templateFile)
+		if err != nil {
+			panic(err)
+		}
+		docTmp = string(tb)
 	}
 
 	t := template.Must(template.New("rca-pr").Parse(docTmp))
