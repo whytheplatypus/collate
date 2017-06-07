@@ -1,4 +1,4 @@
-// # RCA: A tool to help us deal with rca's in github
+// # Collate: A tool to help us deal with rca's in github
 //
 // There are two problems to be solved.
 // It's difficult and annoying to move an issue into
